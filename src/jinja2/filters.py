@@ -1163,6 +1163,7 @@ def sync_do_groupby(
     value: "t.Iterable[V]",
     attribute: t.Union[str, int],
     default: t.Optional[t.Any] = None,
+    key_transform: t.Optional[t.Callable[[t.Any], t.Any]] = None,
 ) -> "t.List[t.Tuple[t.Any, t.List[V]]]":
     """Group a sequence of objects by an attribute using Python's
     :func:`itertools.groupby`. The attribute can use dot notation for
@@ -1203,6 +1204,19 @@ def sync_do_groupby(
           <li>{{ city }}: {{ items|map(attribute="name")|join(", ") }}</li>
         {% endfor %}</ul>
 
+    You can specify a ``key_transform`` callable to format each group
+    key before it is yielded. This only affects the displayed key, not
+    the grouping itself.
+
+    .. sourcecode:: jinja
+
+        <ul>{% for month, posts in posts|groupby("date", key_transform=format_month) %}
+          <li>{{ month }}: {{ posts|map(attribute="title")|join(", ") }}</li>
+        {% endfor %}</ul>
+
+    .. versionchanged:: 3.2
+        Added the ``key_transform`` parameter.
+
     .. versionchanged:: 3.0
         Added the ``default`` parameter.
 
@@ -1211,7 +1225,7 @@ def sync_do_groupby(
     """
     expr = make_attrgetter(environment, attribute, default=default)
     return [
-        _GroupTuple(key, list(values))
+        _GroupTuple(key_transform(key) if key_transform is not None else key, list(values))
         for key, values in groupby(sorted(value, key=expr), expr)
     ]
 
@@ -1222,10 +1236,14 @@ async def do_groupby(
     value: "t.Union[t.AsyncIterable[V], t.Iterable[V]]",
     attribute: t.Union[str, int],
     default: t.Optional[t.Any] = None,
+    key_transform: t.Optional[t.Callable[[t.Any], t.Any]] = None,
 ) -> "t.List[t.Tuple[t.Any, t.List[V]]]":
     expr = make_attrgetter(environment, attribute, default=default)
     return [
-        _GroupTuple(key, await auto_to_list(values))
+        _GroupTuple(
+            key_transform(key) if key_transform is not None else key,
+            await auto_to_list(values),
+        )
         for key, values in groupby(sorted(await auto_to_list(value), key=expr), expr)
     ]
 
